@@ -1,0 +1,17 @@
+[package]
+name = "macroquad_stuff"
+version = "0.1.0"
+edition = "2024"
+
+[workspace]
+members = [
+    "pong"
+]
+resover = "2"
+
+[workspace.dependencies]
+macroquad = "0.4.14"
+macroquad_stuff = { path = "." }
+
+[dependencies]
+macroquad.workspace = true

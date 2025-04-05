@@ -1,6 +1,7 @@
 use std::time::Instant;
 
 use macroquad::{prelude::*, rand};
+use macroquad_stuff::{GameState, run_game_loop};
 
 const BALL_SPEED: f32 = 0.3;
 const BALL_SIZE: f32 = 0.01;
@@ -9,8 +10,6 @@ const PADDLE_HEIGHT: f32 = 0.1;
 
 const TEXT_MS: u64 = 1000;
 const BLINK_MS: u64 = 100;
-
-const TEXT_HEIGHT: f32 = 0.05;
 
 struct State {
     text: String,
@@ -23,7 +22,6 @@ struct State {
     paddle_r: f32,
     blink_l: Instant,
     blink_r: Instant,
-    paused: bool,
 }
 impl Default for State {
     fn default() -> Self {
@@ -38,74 +36,63 @@ impl Default for State {
             paddle_r: 0.5 - PADDLE_HEIGHT / 2.0,
             blink_l: Instant::now(),
             blink_r: Instant::now(),
-            paused: false,
         }
     }
 }
-
-#[macroquad::main("My Game")]
-async fn main() {
-    let mut state = State::default();
-
-    loop {
+impl GameState for State {
+    fn bg_color(&self) -> Color {
+        BLACK
+    }
+    fn update(&mut self, delta_time: f32) {
+        check_points(self);
+        update_positions(self, delta_time);
+    }
+    fn draw(&self) {
         let now = Instant::now();
         let w = screen_width();
         let h = screen_height();
 
-        clear_background(BLACK);
-
-        if is_key_pressed(KeyCode::Space) {
-            state.paused = !state.paused;
-        }
-        if state.paused {
-            draw_text("Paused", w / 2.0 - 50.0, h / 2.0, h * TEXT_HEIGHT, WHITE);
-        }
-
-        // points check
-        check_points(&mut state);
-        let score_text = state.text_timer > now;
-        if score_text {
-            draw_text(&state.text, w / 2.0 - 100.0, h / 2.0, 20.0, WHITE);
-        }
-
-        // position update
-        if !state.paused && !score_text {
-            update_positions(&mut state);
-        }
-
-        // drawing
-        // draw_fps();
-        draw_text(&format!("Left: {}", state.score_l), 10.0, 20.0, 20.0, WHITE);
+        draw_text(&format!("Left: {}", self.score_l), 10.0, 20.0, 20.0, WHITE);
         draw_text(
-            &format!("Right: {}", state.score_r),
+            &format!("Right: {}", self.score_r),
             w - 100.0,
             20.0,
             20.0,
             WHITE,
         );
 
-        if !score_text {
-            draw_circle(state.ball.x * w, state.ball.y * h, BALL_SIZE * h, WHITE);
+        if self.text_timer > now {
+            draw_text(&self.text, w / 2.0 - 100.0, h / 2.0, 20.0, WHITE);
+        } else {
+            draw_circle(self.ball.x * w, self.ball.y * h, BALL_SIZE * h, WHITE);
         }
 
         let paddle_height = PADDLE_HEIGHT * h;
-        let left_color = if state.blink_l > now { GREEN } else { WHITE };
-        draw_rectangle(0.0, state.paddle_l * h, 10.0, paddle_height, left_color);
-        let right_color = if state.blink_r > now { GREEN } else { WHITE };
+        let left_color = if self.blink_l > now { GREEN } else { WHITE };
+        draw_rectangle(0.0, self.paddle_l * h, 10.0, paddle_height, left_color);
+        let right_color = if self.blink_r > now { GREEN } else { WHITE };
         draw_rectangle(
             w - 10.0,
-            state.paddle_r * h,
+            self.paddle_r * h,
             10.0,
             paddle_height,
             right_color,
         );
-        next_frame().await;
+    }
+    fn reset(&mut self) {
+        *self = State::default();
+    }
+    fn is_paused(&self) -> bool {
+        self.text_timer > Instant::now()
     }
 }
 
-fn update_positions(state: &mut State) {
-    let delta = get_frame_time();
+#[macroquad::main("Pong")]
+async fn main() {
+    run_game_loop(State::default()).await;
+}
 
+fn update_positions(state: &mut State, delta: f32) {
     if state.ball.y < 0.0 || state.ball.y > 1.0 {
         state.ball_speed.y *= -1.0;
     }
