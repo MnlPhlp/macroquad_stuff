@@ -138,3 +138,20 @@ pub fn open_file() -> String {
     }
     .block_on()
 }
+
+#[cfg(target_arch = "wasm32")]
+use sapp_jsutils::JsObject;
+
+#[must_use]
+#[cfg(target_arch = "wasm32")]
+pub fn open_file() -> String {
+    let obj = unsafe { open_file_js() };
+    let mut text = String::new();
+    obj.to_string(&mut text);
+    text
+}
+
+#[cfg(target_arch = "wasm32")]
+unsafe extern "C" {
+    fn open_file_js() -> JsObject;
+}

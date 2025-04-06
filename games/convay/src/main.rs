@@ -28,24 +28,24 @@ struct State {
     paused: bool,
 }
 impl Default for State {
-        fn default() -> Self {
-            let mut state = Self {
-                rows: 10,
-                cols: 10,
-                cells: vec![false; 100],
-                next_cells: vec![false; 100],
-                reset_cells: vec![],
-                step_time: 0.5,
-                last_step_time: 0.5,
-                time_elapsed: 0.0,
-                drawing_mode: false,
-                grid_mode: GridMode::Lines,
-                paused: false,
-            };
-            state.spawn_glider();
-            state.reset_cells = state.cells.clone();
-            state
-        }
+    fn default() -> Self {
+        let mut state = Self {
+            rows: START_SIZE,
+            cols: START_SIZE,
+            cells: vec![false; START_SIZE * START_SIZE],
+            next_cells: vec![false; START_SIZE * START_SIZE],
+            reset_cells: vec![],
+            step_time: 0.5,
+            last_step_time: 0.5,
+            time_elapsed: 0.0,
+            drawing_mode: false,
+            grid_mode: GridMode::Lines,
+            paused: false,
+        };
+        state.spawn_glider();
+        state.reset_cells = state.cells.clone();
+        state
+    }
 }
 
 impl GameState for State {
@@ -215,7 +215,6 @@ impl State {
             self.update_cells();
         }
         if self.drawing_mode {
-            #[cfg(not(target_arch = "wasm32"))]
             if is_key_pressed(KeyCode::O) {
                 self.load_from_file();
             }
@@ -291,7 +290,6 @@ impl State {
         self.cols = cols;
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     fn load_from_file(&mut self) {
         let text = macroquad_stuff::open_file();
         for line in text.lines() {

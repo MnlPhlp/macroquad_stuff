@@ -24,3 +24,4 @@ echo "Generating index.html"
 cp "$SCRIPT_DIR/index.html.template" index.html
 sed -i "s|LIST_ITEMS|$list|" index.html
 cp "$SCRIPT_DIR/style.css" style.css
+cp "$SCRIPT_DIR/functions.js" functions.js

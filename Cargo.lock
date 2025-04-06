@@ -775,6 +775,7 @@ dependencies = [
  "macroquad",
  "pollster",
  "rfd",
+ "sapp-jsutils",
 ]
 
 [[package]]
@@ -1140,6 +1141,12 @@ name = "rustversion"
 version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eded382c5f5f786b989652c49544c4877d9f015cc22e145a5ea8ea66c2921cd2"
+
+[[package]]
+name = "sapp-jsutils"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6673c9c245fda02a1e826e199133d1c3d1b8e4a392c9dfe55e4f90a2489b149"
 
 [[package]]
 name = "serde"

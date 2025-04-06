@@ -16,7 +16,11 @@ macroquad_stuff = { path = "." }
 [dependencies]
 macroquad.workspace = true
 rfd = "0.15.3"
+sapp-jsutils = "0.1.7"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 pollster = "0.4.0"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+sapp-jsutils = "0.1.7"
 
