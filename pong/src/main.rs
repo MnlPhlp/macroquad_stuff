@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use macroquad::{prelude::*, rand};
-use macroquad_stuff::{GameState, run_game_loop};
+use macroquad_stuff::GameState;
 
 const BALL_SPEED: f32 = 0.3;
 const BALL_SIZE: f32 = 0.01;
@@ -89,7 +89,7 @@ impl GameState for State {
 
 #[macroquad::main("Pong")]
 async fn main() {
-    run_game_loop(State::default()).await;
+    State::run_game_loop().await;
 }
 
 fn update_positions(state: &mut State, delta: f32) {
