@@ -1,8 +1,10 @@
-#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_truncation, clippy::missing_panics_doc)]
 
 use std::collections::HashMap;
 
 use macroquad::prelude::*;
+#[cfg(not(target_arch = "wasm32"))]
+use pollster::FutureExt;
 
 pub const TEXT_HEIGHT: f32 = 0.05;
 
@@ -72,7 +74,7 @@ async fn run_game_loop<S: GameState>() {
                 WHITE,
             );
             if is_key_pressed(KeyCode::R) {
-                state = S::default();
+                state.reset();
                 paused = false;
             }
             if is_key_pressed(KeyCode::F) {
@@ -90,6 +92,7 @@ pub trait GameState: Default {
     fn draw(&self);
     /// If this returns true, the update will be skipped
     fn is_paused(&self) -> bool;
+    fn reset(&mut self);
     #[must_use]
     fn run_game_loop() -> impl Future<Output = ()> {
         run_game_loop::<Self>()
@@ -121,4 +124,17 @@ pub fn draw_text_top_right(text: &str, w: f32, h: f32, size: f32, white: Color) 
         size,
         white,
     );
+}
+
+#[must_use]
+#[cfg(not(target_arch = "wasm32"))]
+pub fn open_file() -> String {
+    async move {
+        let Some(file) = rfd::AsyncFileDialog::new().pick_file().await else {
+            return String::new();
+        };
+        let data = file.read().await;
+        String::from_utf8_lossy(&data).to_string()
+    }
+    .block_on()
 }

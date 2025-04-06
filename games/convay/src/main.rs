@@ -12,6 +12,8 @@ enum GridMode {
     Shaded,
     None,
 }
+
+const START_SIZE: usize = 40;
 struct State {
     rows: usize,
     cols: usize,
@@ -26,24 +28,24 @@ struct State {
     paused: bool,
 }
 impl Default for State {
-    fn default() -> Self {
-        let mut state = Self {
-            rows: 10,
-            cols: 10,
-            cells: vec![false; 100],
-            next_cells: vec![false; 100],
-            reset_cells: vec![],
-            step_time: 0.5,
-            last_step_time: 0.5,
-            time_elapsed: 0.0,
-            drawing_mode: false,
-            grid_mode: GridMode::Lines,
-            paused: false,
-        };
-        state.spawn_glider();
-        state.reset_cells = state.cells.clone();
-        state
-    }
+        fn default() -> Self {
+            let mut state = Self {
+                rows: 10,
+                cols: 10,
+                cells: vec![false; 100],
+                next_cells: vec![false; 100],
+                reset_cells: vec![],
+                step_time: 0.5,
+                last_step_time: 0.5,
+                time_elapsed: 0.0,
+                drawing_mode: false,
+                grid_mode: GridMode::Lines,
+                paused: false,
+            };
+            state.spawn_glider();
+            state.reset_cells = state.cells.clone();
+            state
+        }
 }
 
 impl GameState for State {
@@ -51,7 +53,7 @@ impl GameState for State {
         BLACK
     }
     fn update(&mut self, delta_time: f32, ctx: &mut Context) {
-        self.handle_input(delta_time, ctx);
+        self.handle_input(ctx);
         self.time_elapsed += delta_time;
         if self.drawing_mode || self.time_elapsed < self.step_time || self.paused {
             return;
@@ -107,7 +109,7 @@ impl GameState for State {
                 if matches!(self.grid_mode, GridMode::Lines) && col > 0 && row == 0 {
                     draw_line(x, 0.0 + border_y, x, h + border_y, line_thickness, WHITE);
                 }
-                let cell_color = if self.cells[row * self.cols + col] {
+                let cell_color = if self.cells[self.get_index(col, row)] {
                     GREEN
                 } else if matches!(self.grid_mode, GridMode::Shaded) {
                     if row % 2 == col % 2 { GRAY } else { DARKGRAY }
@@ -129,6 +131,11 @@ impl GameState for State {
     }
     fn is_paused(&self) -> bool {
         false
+    }
+
+    fn reset(&mut self) {
+        self.cells.clone_from(&self.reset_cells);
+        self.time_elapsed = 0.0;
     }
 }
 
@@ -168,11 +175,11 @@ impl State {
         std::mem::swap(&mut self.cells, &mut self.next_cells);
     }
 
-    fn handle_input(&mut self, delta_time: f32, ctx: &mut Context) {
+    fn handle_input(&mut self, ctx: &mut Context) {
         if is_key_pressed(KeyCode::Space) {
             if self.drawing_mode {
                 // save drawing for reset
-                self.reset_cells = self.cells.clone();
+                self.reset_cells.clone_from(&self.cells);
             } else {
                 self.cells.fill(false);
             }
@@ -207,21 +214,27 @@ impl State {
             // do a single step
             self.update_cells();
         }
-        if self.drawing_mode && is_mouse_button_pressed(MouseButton::Left) {
-            let (border_x, border_y) = get_borders();
-            let mouse_pos = {
-                let (x, y) = mouse_position();
-                (x - border_x, y - border_y)
-            };
+        if self.drawing_mode {
+            #[cfg(not(target_arch = "wasm32"))]
+            if is_key_pressed(KeyCode::O) {
+                self.load_from_file();
+            }
+            if is_mouse_button_pressed(MouseButton::Left) {
+                let (border_x, border_y) = get_borders();
+                let mouse_pos = {
+                    let (x, y) = mouse_position();
+                    (x - border_x, y - border_y)
+                };
 
-            let w = screen_width() - border_x * 2.0;
-            let h = screen_height() - border_y * 2.0;
-            let cw = w / self.cols as f32;
-            let ch = h / self.rows as f32;
-            let col = (mouse_pos.0 / cw).floor() as usize;
-            let row = (mouse_pos.1 / ch).floor() as usize;
-            if col < self.cols && row < self.rows {
-                self.cells[row * self.cols + col] = !self.cells[row * self.cols + col];
+                let w = screen_width() - border_x * 2.0;
+                let h = screen_height() - border_y * 2.0;
+                let cw = w / self.cols as f32;
+                let ch = h / self.rows as f32;
+                let col = (mouse_pos.0 / cw).floor() as usize;
+                let row = (mouse_pos.1 / ch).floor() as usize;
+                if col < self.cols && row < self.rows {
+                    self.cells[row * self.cols + col] = !self.cells[row * self.cols + col];
+                }
             }
         }
     }
@@ -235,11 +248,6 @@ impl State {
             }
             self.cells[idx] = true;
         }
-    }
-
-    fn reset(&mut self) {
-        self.cells = self.reset_cells.clone();
-        self.time_elapsed = 0.0;
     }
 
     fn resize(&mut self, rows: usize, cols: usize) {
@@ -281,6 +289,33 @@ impl State {
         self.next_cells.resize(rows * cols, false);
         self.rows = rows;
         self.cols = cols;
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn load_from_file(&mut self) {
+        let text = macroquad_stuff::open_file();
+        for line in text.lines() {
+            if line.starts_with("//") || line.is_empty() {
+                continue;
+            }
+            let (Ok(x), Ok(y)) = ({
+                let (x, y) = line.split_once(' ').unwrap();
+                let x = x.parse();
+                let y = y.parse();
+                (x, y)
+            }) else {
+                println!("Invalid line: {line}");
+                continue;
+            };
+            let index = self.get_index(x, y);
+            if index < self.cells.len() {
+                self.cells[index] = true;
+            }
+        }
+    }
+
+    fn get_index(&self, x: usize, y: usize) -> usize {
+        x * self.rows + y
     }
 }
 

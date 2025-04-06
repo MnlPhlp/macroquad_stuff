@@ -41,10 +41,12 @@ impl GameState for State {
     fn bg_color(&self) -> Color {
         BLACK
     }
+
     fn update(&mut self, delta_time: f32, _ctx: &mut Context) {
         check_points(self);
         update_positions(self, delta_time);
     }
+
     fn draw(&self) {
         let now = get_time();
         let w = screen_width();
@@ -77,8 +79,13 @@ impl GameState for State {
             right_color,
         );
     }
+
     fn is_paused(&self) -> bool {
         self.text_timer > get_time()
+    }
+
+    fn reset(&mut self) {
+        *self = Self::default();
     }
 }
 
