@@ -3,12 +3,18 @@
 <head>
     <meta charset="utf-8">
     <title>Games</title>
+    <link rel="stylesheet" href="/style.css">
 </head>
 
 <body>
+    <h1 style="text-align:center">Games</h1>
+    <div style="display:flex;justify-content:center;margin-top:4em">
     <ul>
 LIST_ITEMS
+
     </ul>
+    </div>
 </body>
 
 </html>
+

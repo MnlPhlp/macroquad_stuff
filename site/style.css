@@ -1,0 +1,48 @@
+html,
+body,
+canvas {
+    overflow: hidden;
+    z-index: 0;
+}
+html{
+    height: 100%;
+    width: 100%;
+}
+body{
+    height: 100%;
+    width: 100%;
+    text-align: center;
+    font-family: Arial, sans-serif;
+    background-color: #f0f0f0;
+    color: #333;
+}
+canvas {
+    background: black;
+    height:90%;
+    width: 90%;
+}
+h1 {
+    text-align:center
+}
+.back {
+    position: absolute;
+    left: 10px;
+    top: 10px;
+}
+ul {
+    /* list-style-type: none; */
+    padding: 0;
+}
+
+li {
+    margin: 10px 0;
+}
+
+a {
+    text-decoration: none;
+    color: #007BFF;
+}
+
+a:hover {
+    text-decoration: underline;
+}
