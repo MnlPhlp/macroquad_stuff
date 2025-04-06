@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use macroquad::{prelude::*, rand};
 use macroquad_stuff::GameState;
 
@@ -8,34 +6,34 @@ const BALL_SIZE: f32 = 0.01;
 const PADDLE_SPEED: f32 = 0.5;
 const PADDLE_HEIGHT: f32 = 0.1;
 
-const TEXT_MS: u64 = 1000;
-const BLINK_MS: u64 = 100;
+const TEXT_TIME: f64 = 1.0;
+const BLINK_TIME: f64 = 0.1;
 
 struct State {
     text: String,
-    text_timer: Instant,
+    text_timer: f64,
     score_l: u32,
     score_r: u32,
     ball: Vec2,
     ball_speed: Vec2,
     paddle_l: f32,
     paddle_r: f32,
-    blink_l: Instant,
-    blink_r: Instant,
+    blink_l: f64,
+    blink_r: f64,
 }
 impl Default for State {
     fn default() -> Self {
         Self {
             text: String::new(),
-            text_timer: Instant::now(),
+            text_timer: get_time(),
             score_l: 0,
             score_r: 0,
             ball: Vec2::new(0.5, 0.5),
             ball_speed: get_random_speed(),
             paddle_l: 0.5 - PADDLE_HEIGHT / 2.0,
             paddle_r: 0.5 - PADDLE_HEIGHT / 2.0,
-            blink_l: Instant::now(),
-            blink_r: Instant::now(),
+            blink_l: get_time(),
+            blink_r: get_time(),
         }
     }
 }
@@ -48,7 +46,7 @@ impl GameState for State {
         update_positions(self, delta_time);
     }
     fn draw(&self) {
-        let now = Instant::now();
+        let now = get_time();
         let w = screen_width();
         let h = screen_height();
 
@@ -83,7 +81,7 @@ impl GameState for State {
         *self = State::default();
     }
     fn is_paused(&self) -> bool {
-        self.text_timer > Instant::now()
+        self.text_timer > get_time()
     }
 }
 
@@ -117,7 +115,7 @@ fn check_points(state: &mut State) {
     if state.ball.x < 0.0 {
         if state.ball.y > state.paddle_l && state.ball.y < state.paddle_l + PADDLE_HEIGHT {
             state.ball_speed.x *= -1.0;
-            state.blink_l = Instant::now() + std::time::Duration::from_millis(BLINK_MS);
+            state.blink_l = get_time() + BLINK_TIME;
         } else {
             // right player scores
             score(state, false);
@@ -125,7 +123,7 @@ fn check_points(state: &mut State) {
     } else if state.ball.x > 1.0 {
         if state.ball.y > state.paddle_r && state.ball.y < state.paddle_r + PADDLE_HEIGHT {
             state.ball_speed.x *= -1.0;
-            state.blink_r = Instant::now() + std::time::Duration::from_millis(BLINK_MS);
+            state.blink_r = get_time() + BLINK_TIME;
         } else {
             // left player scores
             score(state, true);
@@ -141,7 +139,7 @@ fn score(state: &mut State, left: bool) {
         state.score_r += 1;
         state.text = "Right player scores!".to_string();
     }
-    state.text_timer = Instant::now() + std::time::Duration::from_millis(TEXT_MS);
+    state.text_timer = get_time() + TEXT_TIME;
     state.ball = Vec2::new(0.5, 0.5);
     state.ball_speed = get_random_speed();
     state.paddle_l = 0.5 - PADDLE_HEIGHT / 2.0;

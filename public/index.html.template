@@ -1,0 +1,14 @@
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>Games</title>
+</head>
+
+<body>
+    <ul>
+LIST_ITEMS
+    </ul>
+</body>
+
+</html>
