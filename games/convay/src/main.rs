@@ -5,7 +5,7 @@
 )]
 
 use macroquad::prelude::*;
-use macroquad_stuff::{GameState, is_key_pressed_loop};
+use macroquad_stuff::{Context, GameState};
 
 enum GridMode {
     Lines,
@@ -17,27 +17,32 @@ struct State {
     cols: usize,
     cells: Vec<bool>,
     next_cells: Vec<bool>,
+    reset_cells: Vec<bool>,
     step_time: f32,
+    last_step_time: f32,
     time_elapsed: f32,
     drawing_mode: bool,
-    left_down: f32,
-    right_down: f32,
     grid_mode: GridMode,
+    paused: bool,
 }
 impl Default for State {
     fn default() -> Self {
-        Self {
+        let mut state = Self {
             rows: 10,
             cols: 10,
             cells: vec![false; 100],
             next_cells: vec![false; 100],
+            reset_cells: vec![],
             step_time: 0.5,
+            last_step_time: 0.5,
             time_elapsed: 0.0,
             drawing_mode: false,
-            left_down: 0.0,
-            right_down: 0.0,
             grid_mode: GridMode::Lines,
-        }
+            paused: false,
+        };
+        state.spawn_glider();
+        state.reset_cells = state.cells.clone();
+        state
     }
 }
 
@@ -45,12 +50,13 @@ impl GameState for State {
     fn bg_color(&self) -> Color {
         BLACK
     }
-    fn update(&mut self, delta_time: f32) {
-        self.handle_input(delta_time);
+    fn update(&mut self, delta_time: f32, ctx: &mut Context) {
+        self.handle_input(delta_time, ctx);
         self.time_elapsed += delta_time;
-        if self.drawing_mode || self.time_elapsed < self.step_time {
+        if self.drawing_mode || self.time_elapsed < self.step_time || self.paused {
             return;
         }
+        self.last_step_time = self.time_elapsed;
         self.time_elapsed = 0.0;
         self.update_cells();
     }
@@ -63,11 +69,19 @@ impl GameState for State {
         let text = if self.drawing_mode {
             "Paused for drawing. press Space to Continue"
         } else {
-            "Space: pause, R: reset,  Up/Down: delay, Left/Right: size, G: grid mode"
+            "Space: draw, R: reset,  Up/Down: delay, Left/Right: size, G: grid mode, P: Pause"
         };
         draw_text(text, 5.0, text_height + 5.0, text_height, WHITE);
+        let text = if self.paused {
+            "Paused, P to continue, S to step".to_string()
+        } else {
+            format!(
+                "Delay Target: {:.1}s, Delay: {:.2}s",
+                self.step_time, self.last_step_time
+            )
+        };
         draw_text(
-            format!("Delay: {:.1}s", self.step_time).as_str(),
+            text.as_str(),
             5.0,
             text_height * 2.0 + 5.0,
             text_height,
@@ -113,10 +127,6 @@ impl GameState for State {
         }
         draw_rectangle_lines(border_x, border_y, w, h, 4.0, WHITE);
     }
-    fn reset(&mut self) {
-        *self = Self::default();
-        self.spawn_glider();
-    }
     fn is_paused(&self) -> bool {
         false
     }
@@ -158,12 +168,18 @@ impl State {
         std::mem::swap(&mut self.cells, &mut self.next_cells);
     }
 
-    fn handle_input(&mut self, delta_time: f32) {
+    fn handle_input(&mut self, delta_time: f32, ctx: &mut Context) {
         if is_key_pressed(KeyCode::Space) {
+            if self.drawing_mode {
+                // save drawing for reset
+                self.reset_cells = self.cells.clone();
+            } else {
+                self.cells.fill(false);
+            }
             self.drawing_mode = !self.drawing_mode;
         }
         if is_key_pressed(KeyCode::R) {
-            self.reset_cells();
+            self.reset();
         }
         if is_key_pressed(KeyCode::Up) {
             self.step_time = (self.step_time + 0.1).min(2.0);
@@ -171,10 +187,10 @@ impl State {
         if is_key_pressed(KeyCode::Down) {
             self.step_time = (self.step_time - 0.1).max(0.0);
         }
-        if is_key_pressed_loop(KeyCode::Left, &mut self.left_down, delta_time) {
+        if ctx.is_key_pressed_loop(KeyCode::Left) {
             self.resize(self.rows - 1, self.cols - 1);
         }
-        if is_key_pressed_loop(KeyCode::Right, &mut self.right_down, delta_time) {
+        if ctx.is_key_pressed_loop(KeyCode::Right) {
             self.resize(self.rows + 1, self.cols + 1);
         }
         if is_key_pressed(KeyCode::G) {
@@ -183,6 +199,13 @@ impl State {
                 GridMode::Shaded => GridMode::None,
                 GridMode::None => GridMode::Lines,
             };
+        }
+        if is_key_pressed(KeyCode::P) {
+            self.paused = !self.paused;
+        }
+        if self.paused && ctx.is_key_pressed_loop(KeyCode::S) {
+            // do a single step
+            self.update_cells();
         }
         if self.drawing_mode && is_mouse_button_pressed(MouseButton::Left) {
             let (border_x, border_y) = get_borders();
@@ -214,6 +237,11 @@ impl State {
         }
     }
 
+    fn reset(&mut self) {
+        self.cells = self.reset_cells.clone();
+        self.time_elapsed = 0.0;
+    }
+
     fn resize(&mut self, rows: usize, cols: usize) {
         if rows < 1 || cols < 1 {
             return;
@@ -234,16 +262,25 @@ impl State {
                 }
             }
         }
+        std::mem::swap(&mut self.reset_cells, &mut self.next_cells);
+        self.reset_cells.resize(rows * cols, false);
+        self.reset_cells.fill(false);
+        // map cells to new indices
+        for row in 0..rows {
+            for col in 0..cols {
+                if col >= self.cols || row >= self.rows {
+                    continue;
+                }
+                let old_index = row * self.cols + col;
+                let new_index = row * cols + col;
+                if new_index < self.cells.len() {
+                    self.reset_cells[new_index] = self.next_cells[old_index];
+                }
+            }
+        }
         self.next_cells.resize(rows * cols, false);
         self.rows = rows;
         self.cols = cols;
-    }
-
-    fn reset_cells(&mut self) {
-        self.cells.fill(false);
-        self.drawing_mode = false;
-        self.time_elapsed = 0.0;
-        self.spawn_glider();
     }
 }
 

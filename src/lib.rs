@@ -1,11 +1,43 @@
+#![allow(clippy::cast_possible_truncation)]
+
+use std::collections::HashMap;
+
 use macroquad::prelude::*;
 
 pub const TEXT_HEIGHT: f32 = 0.05;
 
-async fn run_game_loop(mut state: impl GameState) {
+#[derive(Default)]
+pub struct Context {
+    pressed_start: HashMap<KeyCode, f32>,
+}
+
+const KEY_LOOP_DELAY: f32 = 0.5;
+
+impl Context {
+    /// Returns true on the first press of the key and when the key is pressed for a minimum time
+    pub fn is_key_pressed_loop(&mut self, key: KeyCode) -> bool {
+        let start = self.pressed_start.entry(key).or_insert(f32::NAN);
+        let now = get_time() as f32;
+        if is_key_down(key) {
+            if start.is_nan() {
+                *start = now + KEY_LOOP_DELAY;
+                return true;
+            }
+            if *start < now {
+                return true;
+            }
+        } else {
+            *start = f32::NAN;
+        }
+        false
+    }
+}
+
+async fn run_game_loop<S: GameState>() {
     let mut paused = false;
     let mut fps = false;
-    state.reset();
+    let mut state = S::default();
+    let mut context = Context::default();
 
     loop {
         let w = screen_width();
@@ -18,7 +50,7 @@ async fn run_game_loop(mut state: impl GameState) {
             paused = !paused;
         }
         if !paused {
-            state.update(get_frame_time());
+            state.update(get_frame_time(), &mut context);
         }
         state.draw();
 
@@ -40,7 +72,7 @@ async fn run_game_loop(mut state: impl GameState) {
                 WHITE,
             );
             if is_key_pressed(KeyCode::R) {
-                state.reset();
+                state = S::default();
                 paused = false;
             }
             if is_key_pressed(KeyCode::F) {
@@ -54,13 +86,13 @@ async fn run_game_loop(mut state: impl GameState) {
 
 pub trait GameState: Default {
     fn bg_color(&self) -> Color;
-    fn update(&mut self, delta_time: f32);
+    fn update(&mut self, delta_time: f32, ctx: &mut Context);
     fn draw(&self);
-    fn reset(&mut self);
+    /// If this returns true, the update will be skipped
     fn is_paused(&self) -> bool;
     #[must_use]
     fn run_game_loop() -> impl Future<Output = ()> {
-        run_game_loop(Self::default())
+        run_game_loop::<Self>()
     }
 }
 
@@ -89,22 +121,4 @@ pub fn draw_text_top_right(text: &str, w: f32, h: f32, size: f32, white: Color) 
         size,
         white,
     );
-}
-
-const KEY_LOOP_DELAY: f32 = 0.5;
-/// Returns true on the first press of the key and when the key is pressed for a minimum time
-pub fn is_key_pressed_loop(key: KeyCode, elapsed: &mut f32, delta: f32) -> bool {
-    if is_key_down(key) {
-        if elapsed.is_nan() {
-            *elapsed = 0.0;
-            return true;
-        }
-        *elapsed += delta;
-        if *elapsed > KEY_LOOP_DELAY {
-            return true;
-        }
-    } else {
-        *elapsed = f32::NAN;
-    }
-    false
 }

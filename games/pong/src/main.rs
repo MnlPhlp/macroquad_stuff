@@ -1,5 +1,5 @@
 use macroquad::{prelude::*, rand};
-use macroquad_stuff::GameState;
+use macroquad_stuff::{Context, GameState};
 
 const BALL_SPEED: f32 = 0.3;
 const BALL_SIZE: f32 = 0.01;
@@ -41,7 +41,7 @@ impl GameState for State {
     fn bg_color(&self) -> Color {
         BLACK
     }
-    fn update(&mut self, delta_time: f32) {
+    fn update(&mut self, delta_time: f32, _ctx: &mut Context) {
         check_points(self);
         update_positions(self, delta_time);
     }
@@ -76,9 +76,6 @@ impl GameState for State {
             paddle_height,
             right_color,
         );
-    }
-    fn reset(&mut self) {
-        *self = State::default();
     }
     fn is_paused(&self) -> bool {
         self.text_timer > get_time()
