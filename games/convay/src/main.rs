@@ -7,10 +7,14 @@
 use macroquad::prelude::*;
 use macroquad_stuff::{GameState, is_key_pressed_loop};
 
+enum GridMode {
+    Lines,
+    Shaded,
+    None,
+}
 struct State {
     rows: usize,
     cols: usize,
-    line_thickness: f32,
     cells: Vec<bool>,
     next_cells: Vec<bool>,
     step_time: f32,
@@ -18,20 +22,21 @@ struct State {
     drawing_mode: bool,
     left_down: f32,
     right_down: f32,
+    grid_mode: GridMode,
 }
 impl Default for State {
     fn default() -> Self {
         Self {
             rows: 10,
             cols: 10,
-            line_thickness: 2.0,
             cells: vec![false; 100],
             next_cells: vec![false; 100],
-            step_time: 1.0,
+            step_time: 0.5,
             time_elapsed: 0.0,
             drawing_mode: false,
             left_down: 0.0,
             right_down: 0.0,
+            grid_mode: GridMode::Lines,
         }
     }
 }
@@ -58,7 +63,7 @@ impl GameState for State {
         let text = if self.drawing_mode {
             "Paused for drawing. press Space to Continue"
         } else {
-            "Space: pause/draw, R: reset, Up/Down: delay up/down, Left/Right: change size"
+            "Space: pause, R: reset,  Up/Down: delay, Left/Right: size, G: grid mode"
         };
         draw_text(text, 5.0, text_height + 5.0, text_height, WHITE);
         draw_text(
@@ -69,51 +74,47 @@ impl GameState for State {
             WHITE,
         );
 
+        let line_thickness = if matches!(self.grid_mode, GridMode::Lines) {
+            2.0
+        } else {
+            0.0
+        };
         let cw = w / self.cols as f32;
         let ch = h / self.rows as f32;
-        let offset = self.line_thickness / 2.0;
+        let offset = line_thickness / 2.0;
 
         for row in 0..self.rows {
             let y = row as f32 * ch + border_y;
-            if row > 0 {
-                draw_line(
-                    0.0 + border_x,
-                    y,
-                    w + border_x,
-                    y,
-                    self.line_thickness,
-                    WHITE,
-                );
+            if matches!(self.grid_mode, GridMode::Lines) && row > 0 {
+                draw_line(0.0 + border_x, y, w + border_x, y, line_thickness, WHITE);
             }
             for col in 0..self.cols {
                 let x = col as f32 * cw + border_x;
-                if col > 0 && row == 0 {
-                    draw_line(
-                        x,
-                        0.0 + border_y,
-                        x,
-                        h + border_y,
-                        self.line_thickness,
-                        WHITE,
-                    );
+                if matches!(self.grid_mode, GridMode::Lines) && col > 0 && row == 0 {
+                    draw_line(x, 0.0 + border_y, x, h + border_y, line_thickness, WHITE);
                 }
-                if self.cells[row * self.cols + col] {
+                let cell_color = if self.cells[row * self.cols + col] {
+                    GREEN
+                } else if matches!(self.grid_mode, GridMode::Shaded) {
+                    if row % 2 == col % 2 { GRAY } else { DARKGRAY }
+                } else {
+                    WHITE
+                };
+                if cell_color != WHITE {
                     draw_rectangle(
                         x + offset,
                         y + offset,
                         cw - offset * 2.0,
                         ch - offset * 2.0,
-                        GREEN,
+                        cell_color,
                     );
-                };
+                }
             }
         }
-        draw_rectangle_lines(border_x, border_y, w, h, self.line_thickness * 2., WHITE);
+        draw_rectangle_lines(border_x, border_y, w, h, 4.0, WHITE);
     }
     fn reset(&mut self) {
-        self.cells.fill(false);
-        self.drawing_mode = false;
-        self.time_elapsed = 0.0;
+        *self = Self::default();
         self.spawn_glider();
     }
     fn is_paused(&self) -> bool {
@@ -162,7 +163,7 @@ impl State {
             self.drawing_mode = !self.drawing_mode;
         }
         if is_key_pressed(KeyCode::R) {
-            self.reset();
+            self.reset_cells();
         }
         if is_key_pressed(KeyCode::Up) {
             self.step_time = (self.step_time + 0.1).min(2.0);
@@ -175,6 +176,13 @@ impl State {
         }
         if is_key_pressed_loop(KeyCode::Right, &mut self.right_down, delta_time) {
             self.resize(self.rows + 1, self.cols + 1);
+        }
+        if is_key_pressed(KeyCode::G) {
+            self.grid_mode = match self.grid_mode {
+                GridMode::Lines => GridMode::Shaded,
+                GridMode::Shaded => GridMode::None,
+                GridMode::None => GridMode::Lines,
+            };
         }
         if self.drawing_mode && is_mouse_button_pressed(MouseButton::Left) {
             let (border_x, border_y) = get_borders();
@@ -229,6 +237,13 @@ impl State {
         self.next_cells.resize(rows * cols, false);
         self.rows = rows;
         self.cols = cols;
+    }
+
+    fn reset_cells(&mut self) {
+        self.cells.fill(false);
+        self.drawing_mode = false;
+        self.time_elapsed = 0.0;
+        self.spawn_glider();
     }
 }
 
