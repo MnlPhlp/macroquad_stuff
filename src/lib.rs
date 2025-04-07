@@ -1,21 +1,24 @@
 #![allow(clippy::cast_possible_truncation, clippy::missing_panics_doc)]
 
+#[cfg(not(target_arch = "wasm32"))]
+mod context;
+#[cfg(target_arch = "wasm32")]
+mod context_wasm;
+
 use std::collections::HashMap;
 
 use macroquad::prelude::*;
-#[cfg(not(target_arch = "wasm32"))]
-use pollster::FutureExt;
-
 pub const TEXT_HEIGHT: f32 = 0.05;
 
 #[derive(Default)]
-pub struct Context {
+pub struct Context<S: GameState> {
     pressed_start: HashMap<KeyCode, f32>,
+    pub state: S,
 }
 
 const KEY_LOOP_DELAY: f32 = 0.5;
 
-impl Context {
+impl<S: GameState> Context<S> {
     /// Returns true on the first press of the key and when the key is pressed for a minimum time
     pub fn is_key_pressed_loop(&mut self, key: KeyCode) -> bool {
         let start = self.pressed_start.entry(key).or_insert(f32::NAN);
@@ -38,23 +41,22 @@ impl Context {
 async fn run_game_loop<S: GameState>() {
     let mut paused = false;
     let mut fps = false;
-    let mut state = S::default();
-    let mut context = Context::default();
+    let mut ctx = Context::<S>::default();
 
     loop {
         let w = screen_width();
         let h = screen_height();
         let th = TEXT_HEIGHT * h;
 
-        clear_background(state.bg_color());
+        clear_background(ctx.state.bg_color());
 
         if is_key_pressed(KeyCode::Escape) {
             paused = !paused;
         }
         if !paused {
-            state.update(get_frame_time(), &mut context);
+            S::update(&mut ctx, get_frame_time()).await;
         }
-        state.draw();
+        ctx.state.draw();
 
         if fps {
             let fps = get_fps();
@@ -74,7 +76,7 @@ async fn run_game_loop<S: GameState>() {
                 WHITE,
             );
             if is_key_pressed(KeyCode::R) {
-                state.reset();
+                ctx.state.reset();
                 paused = false;
             }
             if is_key_pressed(KeyCode::F) {
@@ -88,7 +90,10 @@ async fn run_game_loop<S: GameState>() {
 
 pub trait GameState: Default {
     fn bg_color(&self) -> Color;
-    fn update(&mut self, delta_time: f32, ctx: &mut Context);
+    fn update(
+        ctx: &mut Context<Self>,
+        delta_time: f32,
+    ) -> impl std::future::Future<Output = ()> + Send;
     fn draw(&self);
     /// If this returns true, the update will be skipped
     fn is_paused(&self) -> bool;
@@ -124,34 +129,4 @@ pub fn draw_text_top_right(text: &str, w: f32, h: f32, size: f32, white: Color) 
         size,
         white,
     );
-}
-
-#[must_use]
-#[cfg(not(target_arch = "wasm32"))]
-pub fn open_file() -> String {
-    async move {
-        let Some(file) = rfd::AsyncFileDialog::new().pick_file().await else {
-            return String::new();
-        };
-        let data = file.read().await;
-        String::from_utf8_lossy(&data).to_string()
-    }
-    .block_on()
-}
-
-#[cfg(target_arch = "wasm32")]
-use sapp_jsutils::JsObject;
-
-#[must_use]
-#[cfg(target_arch = "wasm32")]
-pub fn open_file() -> String {
-    let obj = unsafe { open_file_js() };
-    let mut text = String::new();
-    obj.to_string(&mut text);
-    text
-}
-
-#[cfg(target_arch = "wasm32")]
-unsafe extern "C" {
-    fn open_file_js() -> JsObject;
 }

@@ -4,23 +4,30 @@ register_plugin = function(importObject) {
 }
 miniquad_add_plugin({ register_plugin })
 
+async function fileToText(file) {
+    const reader = new FileReader();
+    return new Promise((resolve, reject) => {
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsText(file);
+    });
+}
+
 
 async function open_file() {
     const input = document.createElement('input');
     input.type = 'file';
-    const data = await new Promise((resolve) => {
+    const text = await new Promise((resolve) => {
         input.onchange = async e => {
             const target = e.target;
 
             if (!target.files || target.files.length === 0) {
                 return;
             }
-            const data = new Uint8Array(await (await fileToBlob(target.files[0])).arrayBuffer());
-            resolve(data);
+            const text = await fileToText(target.files[0]);
+            resolve(text);
         }
         input.click();
     });
-    const decoder = new TextDecoder("utf-8");
-    const text = decoder.decode(data);
-    return js_object(text);
+    wasm_exports.string_response(js_object(text));
 }

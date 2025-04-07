@@ -42,9 +42,9 @@ impl GameState for State {
         BLACK
     }
 
-    fn update(&mut self, delta_time: f32, _ctx: &mut Context) {
-        check_points(self);
-        update_positions(self, delta_time);
+    async fn update(ctx: &mut Context<Self>, delta_time: f32) {
+        check_points(&mut ctx.state);
+        update_positions(&mut ctx.state, delta_time);
     }
 
     fn draw(&self) {

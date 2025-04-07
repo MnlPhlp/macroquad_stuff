@@ -52,15 +52,18 @@ impl GameState for State {
     fn bg_color(&self) -> Color {
         BLACK
     }
-    fn update(&mut self, delta_time: f32, ctx: &mut Context) {
-        self.handle_input(ctx);
-        self.time_elapsed += delta_time;
-        if self.drawing_mode || self.time_elapsed < self.step_time || self.paused {
+    async fn update(ctx: &mut Context<Self>, delta_time: f32) {
+        handle_input(ctx).await;
+        ctx.state.time_elapsed += delta_time;
+        if ctx.state.drawing_mode
+            || ctx.state.time_elapsed < ctx.state.step_time
+            || ctx.state.paused
+        {
             return;
         }
-        self.last_step_time = self.time_elapsed;
-        self.time_elapsed = 0.0;
-        self.update_cells();
+        ctx.state.last_step_time = ctx.state.time_elapsed;
+        ctx.state.time_elapsed = 0.0;
+        ctx.state.update_cells();
     }
     fn draw(&self) {
         let (border_x, border_y) = get_borders();
@@ -68,17 +71,20 @@ impl GameState for State {
         let h = screen_height() - border_y * 2.0;
 
         let text_height = 30.0;
+        draw_text(
+            "Space: draw, R: reset,  Up/Down: delay, Left/Right: size, G: grid mode",
+            5.0,
+            text_height + 5.0,
+            text_height,
+            WHITE,
+        );
         let text = if self.drawing_mode {
-            "Paused for drawing. press Space to Continue"
-        } else {
-            "Space: draw, R: reset,  Up/Down: delay, Left/Right: size, G: grid mode, P: Pause"
-        };
-        draw_text(text, 5.0, text_height + 5.0, text_height, WHITE);
-        let text = if self.paused {
+            "drawing mode. press Space to continue".to_string()
+        } else if self.paused {
             "Paused, P to continue, S to step".to_string()
         } else {
             format!(
-                "Delay Target: {:.1}s, Delay: {:.2}s",
+                "Delay Target: {:.1}s, Delay: {:.2}s; P to Pause",
                 self.step_time, self.last_step_time
             )
         };
@@ -175,69 +181,6 @@ impl State {
         std::mem::swap(&mut self.cells, &mut self.next_cells);
     }
 
-    fn handle_input(&mut self, ctx: &mut Context) {
-        if is_key_pressed(KeyCode::Space) {
-            if self.drawing_mode {
-                // save drawing for reset
-                self.reset_cells.clone_from(&self.cells);
-            } else {
-                self.cells.fill(false);
-            }
-            self.drawing_mode = !self.drawing_mode;
-        }
-        if is_key_pressed(KeyCode::R) {
-            self.reset();
-        }
-        if is_key_pressed(KeyCode::Up) {
-            self.step_time = (self.step_time + 0.1).min(2.0);
-        }
-        if is_key_pressed(KeyCode::Down) {
-            self.step_time = (self.step_time - 0.1).max(0.0);
-        }
-        if ctx.is_key_pressed_loop(KeyCode::Left) {
-            self.resize(self.rows - 1, self.cols - 1);
-        }
-        if ctx.is_key_pressed_loop(KeyCode::Right) {
-            self.resize(self.rows + 1, self.cols + 1);
-        }
-        if is_key_pressed(KeyCode::G) {
-            self.grid_mode = match self.grid_mode {
-                GridMode::Lines => GridMode::Shaded,
-                GridMode::Shaded => GridMode::None,
-                GridMode::None => GridMode::Lines,
-            };
-        }
-        if is_key_pressed(KeyCode::P) {
-            self.paused = !self.paused;
-        }
-        if self.paused && ctx.is_key_pressed_loop(KeyCode::S) {
-            // do a single step
-            self.update_cells();
-        }
-        if self.drawing_mode {
-            if is_key_pressed(KeyCode::O) {
-                self.load_from_file();
-            }
-            if is_mouse_button_pressed(MouseButton::Left) {
-                let (border_x, border_y) = get_borders();
-                let mouse_pos = {
-                    let (x, y) = mouse_position();
-                    (x - border_x, y - border_y)
-                };
-
-                let w = screen_width() - border_x * 2.0;
-                let h = screen_height() - border_y * 2.0;
-                let cw = w / self.cols as f32;
-                let ch = h / self.rows as f32;
-                let col = (mouse_pos.0 / cw).floor() as usize;
-                let row = (mouse_pos.1 / ch).floor() as usize;
-                if col < self.cols && row < self.rows {
-                    self.cells[row * self.cols + col] = !self.cells[row * self.cols + col];
-                }
-            }
-        }
-    }
-
     fn spawn_glider(&mut self) {
         // spawn glider in top left corner
         for (x, y) in [(0, 1), (1, 2), (2, 0), (2, 1), (2, 2)] {
@@ -290,30 +233,95 @@ impl State {
         self.cols = cols;
     }
 
-    fn load_from_file(&mut self) {
-        let text = macroquad_stuff::open_file();
-        for line in text.lines() {
-            if line.starts_with("//") || line.is_empty() {
-                continue;
-            }
-            let (Ok(x), Ok(y)) = ({
-                let (x, y) = line.split_once(' ').unwrap();
-                let x = x.parse();
-                let y = y.parse();
-                (x, y)
-            }) else {
-                println!("Invalid line: {line}");
-                continue;
+    fn get_index(&self, x: usize, y: usize) -> usize {
+        x * self.rows + y
+    }
+}
+
+async fn handle_input(ctx: &mut Context<State>) {
+    if is_key_pressed(KeyCode::Space) {
+        if ctx.state.drawing_mode {
+            // save drawing for reset
+            ctx.state.reset_cells.clone_from(&ctx.state.cells);
+            info!("Saved drawing");
+        } else {
+            ctx.state.cells.fill(false);
+        }
+        ctx.state.drawing_mode = !ctx.state.drawing_mode;
+    }
+    if is_key_pressed(KeyCode::R) {
+        ctx.state.reset();
+    }
+    if is_key_pressed(KeyCode::Up) {
+        ctx.state.step_time = (ctx.state.step_time + 0.1).min(2.0);
+    }
+    if is_key_pressed(KeyCode::Down) {
+        ctx.state.step_time = (ctx.state.step_time - 0.1).max(0.0);
+    }
+    if ctx.is_key_pressed_loop(KeyCode::Left) {
+        ctx.state.resize(ctx.state.rows - 1, ctx.state.cols - 1);
+    }
+    if ctx.is_key_pressed_loop(KeyCode::Right) {
+        ctx.state.resize(ctx.state.rows + 1, ctx.state.cols + 1);
+    }
+    if is_key_pressed(KeyCode::G) {
+        ctx.state.grid_mode = match ctx.state.grid_mode {
+            GridMode::Lines => GridMode::Shaded,
+            GridMode::Shaded => GridMode::None,
+            GridMode::None => GridMode::Lines,
+        };
+    }
+    if !ctx.state.drawing_mode && is_key_pressed(KeyCode::P) {
+        ctx.state.paused = !ctx.state.paused;
+    }
+    if ctx.state.paused && ctx.is_key_pressed_loop(KeyCode::S) {
+        // do a single step
+        ctx.state.update_cells();
+    }
+    if ctx.state.drawing_mode {
+        if is_key_pressed(KeyCode::O) {
+            load_from_file(ctx).await;
+        }
+        if is_mouse_button_pressed(MouseButton::Left) {
+            let (border_x, border_y) = get_borders();
+            let mouse_pos = {
+                let (x, y) = mouse_position();
+                (x - border_x, y - border_y)
             };
-            let index = self.get_index(x, y);
-            if index < self.cells.len() {
-                self.cells[index] = true;
+
+            let w = screen_width() - border_x * 2.0;
+            let h = screen_height() - border_y * 2.0;
+            let cw = w / ctx.state.cols as f32;
+            let ch = h / ctx.state.rows as f32;
+            let x = (mouse_pos.0 / cw).floor() as usize;
+            let y = (mouse_pos.1 / ch).floor() as usize;
+            let index = ctx.state.get_index(x, y);
+            if index < ctx.state.cells.len() {
+                ctx.state.cells[index] = !ctx.state.cells[index];
             }
         }
     }
+}
 
-    fn get_index(&self, x: usize, y: usize) -> usize {
-        x * self.rows + y
+async fn load_from_file(ctx: &mut Context<State>) {
+    let text = ctx.open_file().await;
+    for line in text.lines() {
+        if line.starts_with("//") || line.is_empty() {
+            continue;
+        }
+        let (Ok(x), Ok(y)) = ({
+            let (x, y) = line.split_once(' ').unwrap();
+            let x = x.parse();
+            let y = y.parse();
+            (x, y)
+        }) else {
+            println!("Invalid line: {line}");
+            continue;
+        };
+        let index = ctx.state.get_index(x, y);
+        if index < ctx.state.cells.len() {
+            ctx.state.cells[index] = true;
+        }
     }
 }
 
